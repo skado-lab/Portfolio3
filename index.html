@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商品ポートフォリオ 分布図</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #f7f8fa;
+    color: #1a1a2e;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    padding: 32px;
+  }
+  header { margin-bottom: 28px; }
+  .header-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: #999;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  h1 { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .header-sub { font-size: 12px; color: #999; }
+
+  .main-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* ===== LIST PANEL ===== */
+  .list-panel {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 14px;
+    overflow: hidden;
+    position: sticky;
+    top: 20px;
+  }
+  .list-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .list-header-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .search-box {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: 'Noto Sans JP', sans-serif;
+    color: #333;
+    background: #fafafa;
+    outline: none;
+  }
+  .search-box:focus { border-color: #4a6fa5; background: #fff; }
+
+  .list-cols {
+    display: grid;
+    grid-template-columns: 1fr 72px 72px 48px 52px;
+    gap: 0;
+    padding: 6px 16px;
+    background: #f8f8f8;
+    border-bottom: 1px solid #ececec;
+  }
+  .list-col-label {
+    font-size: 10px;
+    color: #aaa;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .list-body {
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+  }
+  .list-body::-webkit-scrollbar { width: 4px; }
+  .list-body::-webkit-scrollbar-track { background: transparent; }
+  .list-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+  .list-row {
+    display: grid;
+    grid-template-columns: 1fr 72px 72px 48px 52px;
+    gap: 0;
+    padding: 8px 16px;
+    border-bottom: 1px solid #f5f5f5;
+    cursor: pointer;
+    transition: background 0.12s;
+    align-items: center;
+  }
+  .list-row:hover { background: #f5f8ff; }
+  .list-row.selected { background: #edf2ff; }
+  .list-row.selected .row-name { color: #3a5fc4; font-weight: 500; }
+
+  .row-name {
+    font-size: 11px;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 6px;
+  }
+  .row-val {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: #555;
+    text-align: right;
+  }
+  .row-val.highlight { color: #3a5fc4; }
+
+  .select-count {
+    font-size: 11px;
+    color: #4a6fa5;
+    padding: 6px 16px;
+    border-top: 1px solid #f0f0f0;
+    background: #fafbff;
+  }
+
+  /* ===== CHARTS PANEL ===== */
+  .charts-panel { display: flex; flex-direction: column; gap: 20px; }
+
+  .chart-card {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 14px;
+    padding: 24px 28px;
+  }
+  .chart-number {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #bbb;
+    letter-spacing: 0.15em;
+    margin-bottom: 4px;
+  }
+  .chart-title { font-size: 14px; font-weight: 500; }
+  .chart-desc { font-size: 11px; color: #aaa; margin-top: 3px; }
+  .chart-wrap { position: relative; width: 100%; height: 300px; margin-top: 18px; }
+
+  /* ===== TOOLTIP ===== */
+  .tooltip-custom {
+    position: fixed;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 999;
+    min-width: 180px;
+    display: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  }
+  .tooltip-name { font-weight: 500; font-size: 13px; margin-bottom: 7px; color: #1a1a2e; }
+  .tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    color: #aaa;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    margin-top: 3px;
+  }
+  .tooltip-val { color: #1a1a2e; font-weight: 500; }
+  .tooltip-selected {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 10px;
+    background: #edf2ff;
+    color: #3a5fc4;
+    padding: 2px 8px;
+    border-radius: 99px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="header-label">Portfolio Analysis</p>
+  <h1>商品ポートフォリオ 分布図</h1>
+  <p class="header-sub">リストから商品を選択すると分布図の点がハイライトされます（複数選択可）</p>
+</header>
+
+<div class="main-layout">
+
+  <!-- LIST PANEL -->
+  <div class="list-panel">
+    <div class="list-header">
+      <p class="list-header-title">商品リスト <span id="total-count" style="color:#aaa;font-weight:300;"></span></p>
+      <input class="search-box" id="search" type="text" placeholder="商品名で絞り込み...">
+    </div>
+    <div class="list-cols">
+      <span class="list-col-label">商品名</span>
+      <span class="list-col-label" style="text-align:right">売上</span>
+      <span class="list-col-label" style="text-align:right">粗利額</span>
+      <span class="list-col-label" style="text-align:right">納品</span>
+      <span class="list-col-label" style="text-align:right">粗利率</span>
+    </div>
+    <div class="list-body" id="list-body"></div>
+    <div class="select-count" id="select-count" style="display:none;"></div>
+  </div>
+
+  <!-- CHARTS PANEL -->
+  <div class="charts-panel">
+    <div class="chart-card">
+      <p class="chart-number">CHART 01</p>
+      <p class="chart-title">売上 vs 粗利益額</p>
+      <p class="chart-desc">縦軸：純売上額　横軸：粗利益額</p>
+      <div class="chart-wrap"><canvas id="c1" role="img" aria-label="売上と粗利益額の散布図"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <p class="chart-number">CHART 02</p>
+      <p class="chart-title">納入件数 vs 粗利率</p>
+      <p class="chart-desc">縦軸：納入件数　横軸：粗利率（%）</p>
+      <div class="chart-wrap"><canvas id="c2" role="img" aria-label="納入件数と粗利率の散布図"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <p class="chart-number">CHART 03</p>
+      <p class="chart-title">売上 vs 粗利率</p>
+      <p class="chart-desc">縦軸：純売上額　横軸：粗利率（%）</p>
+      <div class="chart-wrap"><canvas id="c3" role="img" aria-label="売上と粗利率の散布図"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip-custom" id="tt">
+  <div class="tooltip-name" id="tt-name"></div>
+  <div class="tooltip-row"><span>売上</span><span class="tooltip-val" id="tt-sales"></span></div>
+  <div class="tooltip-row"><span>粗利益額</span><span class="tooltip-val" id="tt-profit"></span></div>
+  <div class="tooltip-row"><span>粗利率</span><span class="tooltip-val" id="tt-margin"></span></div>
+  <div class="tooltip-row"><span>納入件数</span><span class="tooltip-val" id="tt-delivery"></span></div>
+  <div id="tt-sel"></div>
+</div>
+
+<script>
+const DATA = [{"name":"FC 2010","sales":5616758,"profit":-156606,"delivery":2,"margin":-2.8},{"name":"OP白 10g缶","sales":4341731,"profit":-69885,"delivery":21,"margin":-1.6},{"name":"OP白 3g箱","sales":9599029,"profit":387904,"delivery":1,"margin":4.0},{"name":"乾燥剤シート（C3070-","sales":27951000,"profit":464640,"delivery":1,"margin":1.7},{"name":"CNｴｽｴｽ長 1g","sales":5278735,"profit":564740,"delivery":1,"margin":10.7},{"name":"ﾊB白40DOWN16","sales":6175381,"profit":604629,"delivery":1,"margin":9.8},{"name":"ｲﾝｼﾞｹｰﾀｰF緑on6","sales":4118765,"profit":808585,"delivery":7,"margin":19.6},{"name":"ﾊ 白 40DOWN","sales":5396329,"profit":988079,"delivery":2,"margin":18.3},{"name":"ｲﾝｼﾞｹｰﾀｰF5-10","sales":5897359,"profit":1178909,"delivery":9,"margin":20.0},{"name":"金属ｷｬｯﾌﾟ(関西色)№8","sales":5206740,"profit":1264956,"delivery":1,"margin":24.3},{"name":"DO 1808","sales":6161119,"profit":1271851,"delivery":11,"margin":20.6},{"name":"OP(JIS無)10gx30AL袋","sales":5092355,"profit":1293060,"delivery":23,"margin":25.4},{"name":"製剤 200gx5","sales":3395190,"profit":1339158,"delivery":2,"margin":39.4},{"name":"DO和 1506","sales":5075928,"profit":1378003,"delivery":2,"margin":27.1},{"name":"CNﾌｧｲｻﾞｰ 長3g箱","sales":9484697,"profit":1416857,"delivery":1,"margin":14.9},{"name":"DO 1306","sales":5704857,"profit":1444918,"delivery":5,"margin":25.3},{"name":"Ｗ　新50g箱","sales":4982487,"profit":1446732,"delivery":12,"margin":29.0},{"name":"AJ 7gｶﾐﾛｰﾙ","sales":3429426,"profit":1545982,"delivery":1,"margin":45.1},{"name":"AJ 5gｶﾐﾛｰﾙ","sales":3614886,"profit":1560636,"delivery":2,"margin":43.2},{"name":"US(無地)200g缶","sales":3732729,"profit":1573671,"delivery":1,"margin":42.2},{"name":"CNｾﾞｵﾗｲﾄ(F-9)　4g連","sales":5249200,"profit":1584110,"delivery":1,"margin":30.2},{"name":"ｶﾗｯとﾋｰﾛｰ(ｵﾚﾝｼﾞ)ﾏｸｱｹ","sales":3456924,"profit":1624881,"delivery":1,"margin":47.0},{"name":"DO 1506","sales":9762518,"profit":1726444,"delivery":14,"margin":17.7},{"name":"ﾊB白40UP 16","sales":16673824,"profit":1737760,"delivery":1,"margin":10.4},{"name":"PW 1510","sales":4674267,"profit":1745169,"delivery":12,"margin":37.3},{"name":"DO和 1810","sales":5607645,"profit":1763204,"delivery":1,"margin":31.4},{"name":"US白250g缶","sales":4417390,"profit":1852524,"delivery":2,"margin":41.9},{"name":"HDP-S3ｇ","sales":7644780,"profit":1855260,"delivery":1,"margin":24.3},{"name":"ｱﾝﾁｳﾑ 5万 20","sales":11385320,"profit":1979805,"delivery":5,"margin":17.4},{"name":"脱臭乾燥剤1g 30×70","sales":17407548,"profit":2014830,"delivery":1,"margin":11.6},{"name":"US袋白200g缶","sales":3973223,"profit":2079886,"delivery":11,"margin":52.4},{"name":"PW 1306","sales":5301369,"profit":2167080,"delivery":18,"margin":40.9},{"name":"DO 1810","sales":9982692,"profit":2351936,"delivery":12,"margin":23.6},{"name":"CNｾﾞｵﾗｲﾄ(A-4)３g連","sales":10550100,"profit":2352900,"delivery":1,"margin":22.3},{"name":"PW 4010","sales":7396835,"profit":2456515,"delivery":5,"margin":33.2},{"name":"DO 2010","sales":15640533,"profit":2503862,"delivery":13,"margin":16.0},{"name":"Ｗ　新 100g缶","sales":5538326,"profit":2814475,"delivery":18,"margin":50.8},{"name":"Ｗ　新 50g缶","sales":7051875,"profit":2841450,"delivery":29,"margin":40.3},{"name":"PW 1808","sales":9972227,"profit":3011041,"delivery":23,"margin":30.2},{"name":"Ｗ新 100g箱","sales":6807934,"profit":3059342,"delivery":13,"margin":44.9},{"name":"製剤 200gx2","sales":17297541,"profit":3172546,"delivery":4,"margin":18.3},{"name":"J US白500g缶","sales":9113732,"profit":3287475,"delivery":23,"margin":36.1},{"name":"PW 2510","sales":11714626,"profit":3605382,"delivery":24,"margin":30.8},{"name":"PW 2513","sales":10993799,"profit":3902993,"delivery":9,"margin":35.5},{"name":"PW 3010","sales":11824811,"profit":4216661,"delivery":9,"margin":35.7},{"name":"ST 1005","sales":11139700,"profit":4340600,"delivery":4,"margin":39.0},{"name":"PW 1805","sales":16463909,"profit":5336165,"delivery":19,"margin":32.4},{"name":"活性炭ｼｰﾄ3070全星","sales":17017077,"profit":5345222,"delivery":1,"margin":31.4},{"name":"Ｓ３０７０","sales":18355645,"profit":5356527,"delivery":9,"margin":29.2},{"name":"DO（和文）2510","sales":19095060,"profit":6689192,"delivery":1,"margin":35.0},{"name":"PW 1506","sales":19848201,"profit":8315925,"delivery":27,"margin":41.9},{"name":"活性炭ｼｰﾄHG3574","sales":18738225,"profit":8496785,"delivery":1,"margin":45.3},{"name":"PW 1810","sales":28234414,"profit":9091151,"delivery":21,"margin":32.2},{"name":"PW 2010","sales":57761146,"profit":14828471,"delivery":23,"margin":25.7}];
+
+const fmtM = v => '¥' + (v/1000000).toFixed(1) + 'M';
+const fmtPct = v => v.toFixed(1) + '%';
+
+const COLOR_DEFAULT = '#c5cfe0';
+const COLOR_SELECTED = '#e8453c';
+const COLOR_DEFAULT_BORDER = '#b0bed4';
+const COLOR_SELECTED_BORDER = '#c0392b';
+
+let selected = new Set();
+let filteredNames = new Set(DATA.map(d => d.name));
+
+// ===== LIST =====
+const listBody = document.getElementById('list-body');
+document.getElementById('total-count').textContent = `（${DATA.length}件）`;
+
+function fmtShort(v) {
+  if (Math.abs(v) >= 1000000) return (v/1000000).toFixed(1) + 'M';
+  if (Math.abs(v) >= 1000) return (v/1000).toFixed(0) + 'K';
+  return v;
+}
+
+function renderList() {
+  const query = document.getElementById('search').value.trim().toLowerCase();
+  listBody.innerHTML = '';
+  const visible = DATA.filter(d => d.name.toLowerCase().includes(query));
+  filteredNames = new Set(visible.map(d => d.name));
+
+  visible.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'list-row' + (selected.has(d.name) ? ' selected' : '');
+    row.dataset.name = d.name;
+    row.innerHTML = `
+      <span class="row-name" title="${d.name}">${d.name}</span>
+      <span class="row-val">${fmtShort(d.sales)}</span>
+      <span class="row-val">${fmtShort(d.profit)}</span>
+      <span class="row-val">${d.delivery}</span>
+      <span class="row-val ${selected.has(d.name) ? 'highlight' : ''}">${d.margin.toFixed(1)}%</span>
+    `;
+    row.addEventListener('click', () => toggleSelect(d.name));
+    listBody.appendChild(row);
+  });
+
+  const sc = document.getElementById('select-count');
+  if (selected.size > 0) {
+    sc.style.display = 'block';
+    sc.textContent = `${selected.size}件選択中　（クリックで解除）`;
+  } else {
+    sc.style.display = 'none';
+  }
+}
+
+function toggleSelect(name) {
+  if (selected.has(name)) {
+    selected.delete(name);
+  } else {
+    selected.add(name);
+  }
+  renderList();
+  updateCharts();
+}
+
+document.getElementById('search').addEventListener('input', renderList);
+
+// ===== CHARTS =====
+function getColors(xFn, yFn) {
+  return DATA.map(d => ({
+    x: xFn(d), y: yFn(d), _d: d,
+    _sel: selected.has(d.name)
+  }));
+}
+
+function makeDatasets(xFn, yFn) {
+  const pts = DATA.map(d => ({ x: xFn(d), y: yFn(d), _d: d }));
+  const unsel = pts.filter(p => !selected.has(p._d.name));
+  const sel = pts.filter(p => selected.has(p._d.name));
+  return [
+    {
+      label: 'default',
+      data: unsel,
+      backgroundColor: COLOR_DEFAULT + 'cc',
+      borderColor: COLOR_DEFAULT_BORDER,
+      borderWidth: 1,
+      pointRadius: 6,
+      pointHoverRadius: 9,
+      order: 2,
+    },
+    {
+      label: 'selected',
+      data: sel,
+      backgroundColor: COLOR_SELECTED + 'dd',
+      borderColor: COLOR_SELECTED_BORDER,
+      borderWidth: 2,
+      pointRadius: 9,
+      pointHoverRadius: 12,
+      order: 1,
+    }
+  ];
+}
+
+const tt = document.getElementById('tt');
+function showTooltip(e, item) {
+  const d = item._d;
+  document.getElementById('tt-name').textContent = d.name;
+  document.getElementById('tt-sales').textContent = fmtM(d.sales);
+  document.getElementById('tt-profit').textContent = fmtM(d.profit);
+  document.getElementById('tt-margin').textContent = fmtPct(d.margin);
+  document.getElementById('tt-delivery').textContent = d.delivery + '件';
+  const selEl = document.getElementById('tt-sel');
+  selEl.innerHTML = selected.has(d.name) ? '<span class="tooltip-selected">選択中</span>' : '';
+  tt.style.display = 'block';
+}
+function hideTooltip() { tt.style.display = 'none'; }
+
+const gridColor = '#f0f0f0';
+const tickColor = '#bbb';
+const titleColor = '#aaa';
+
+function baseOpts(xLabel, yLabel, xFmt, yFmt, xMin, xMax, yMin, yMax) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 300 },
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    onHover: (e, elements, chart) => {
+      if (elements.length > 0) {
+        const el = elements[0];
+        const item = chart.data.datasets[el.datasetIndex].data[el.index];
+        showTooltip(e.native, item);
+      } else {
+        hideTooltip();
+      }
+    },
+    scales: {
+      x: {
+        min: xMin, max: xMax,
+        title: { display: true, text: xLabel, color: titleColor, font: { size: 11 } },
+        ticks: { callback: v => xFmt(v), color: tickColor, font: { size: 10 } },
+        grid: { color: gridColor }, border: { color: '#e5e5e5' }
+      },
+      y: {
+        min: yMin, max: yMax,
+        title: { display: true, text: yLabel, color: titleColor, font: { size: 11 } },
+        ticks: { callback: v => yFmt(v), color: tickColor, font: { size: 10 } },
+        grid: { color: gridColor }, border: { color: '#e5e5e5' }
+      }
+    }
+  };
+}
+
+const charts = [
+  { id: 'c1', xFn: d => d.profit, yFn: d => d.sales,    xLabel: '粗利益額', yLabel: '純売上額', xFmt: fmtM,    yFmt: fmtM,    xMin:-2000000, xMax:16000000, yMin:0, yMax:62000000 },
+  { id: 'c2', xFn: d => d.margin, yFn: d => d.delivery, xLabel: '粗利率 (%)', yLabel: '納入件数', xFmt: fmtPct, yFmt: v=>v+'件', xMin:-8, xMax:58, yMin:-1, yMax:32 },
+  { id: 'c3', xFn: d => d.margin, yFn: d => d.sales,    xLabel: '粗利率 (%)', yLabel: '純売上額', xFmt: fmtPct, yFmt: fmtM,    xMin:-8, xMax:58, yMin:0, yMax:62000000 },
+];
+
+const chartInstances = charts.map(cfg =>
+  new Chart(document.getElementById(cfg.id), {
+    type: 'scatter',
+    data: { datasets: makeDatasets(cfg.xFn, cfg.yFn) },
+    options: baseOpts(cfg.xLabel, cfg.yLabel, cfg.xFmt, cfg.yFmt, cfg.xMin, cfg.xMax, cfg.yMin, cfg.yMax)
+  })
+);
+
+function updateCharts() {
+  chartInstances.forEach((chart, i) => {
+    const cfg = charts[i];
+    const ds = makeDatasets(cfg.xFn, cfg.yFn);
+    chart.data.datasets[0].data = ds[0].data;
+    chart.data.datasets[1].data = ds[1].data;
+    chart.update();
+  });
+}
+
+document.addEventListener('mousemove', e => {
+  if (tt.style.display === 'block') {
+    tt.style.left = (e.clientX + 16) + 'px';
+    tt.style.top  = (e.clientY - 10) + 'px';
+  }
+});
+
+renderList();
+</script>
+</body>
+</html>
